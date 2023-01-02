@@ -231,6 +231,9 @@ def load_config():
     IGNORE_PENDING_REQUESTS = environ.get('IGNORE_PENDING_REQUESTS', '')
     IGNORE_PENDING_REQUESTS = IGNORE_PENDING_REQUESTS.lower() == 'true'
 
+    MEDIA_GROUP = environ.get('MEDIA_GROUP', '')
+    MEDIA_GROUP = MEDIA_GROUP.lower() == 'true'
+
     SERVER_PORT = environ.get('SERVER_PORT', '')
     SERVER_PORT = 80 if len(SERVER_PORT) == 0 else int(SERVER_PORT)
     BASE_URL = environ.get('BASE_URL', '').rstrip("/")
@@ -288,6 +291,7 @@ def load_config():
                         'IS_TEAM_DRIVE': IS_TEAM_DRIVE,
                         'LEECH_FILENAME_PREFIX': LEECH_FILENAME_PREFIX,
                         'LEECH_SPLIT_SIZE': LEECH_SPLIT_SIZE,
+                        'MEDIA_GROUP': MEDIA_GROUP,
                         'MEGA_API_KEY': MEGA_API_KEY,
                         'MEGA_EMAIL_ID': MEGA_EMAIL_ID,
                         'MEGA_PASSWORD': MEGA_PASSWORD,
@@ -348,7 +352,7 @@ def get_buttons(key=None, edit_type=None):
     elif key == 'private':
         buttons.sbutton('Back', "botset back")
         buttons.sbutton('Close', "botset close")
-        msg = 'Send private file: config.env, token.pickle, accounts.zip, list_drives.txt, cookies.txt or .netrc.' \
+        msg = 'Send private file: config.env, token.pickle, accounts.zip, list_drives.txt, cookies.txt, terabox.txt or .netrc.' \
               '\nTo delete private file send the name of the file only as text message.\nTimeout: 60 sec'
     elif key == 'aria':
         for k in list(aria2_options.keys())[START:10+START]:
@@ -396,10 +400,7 @@ def get_buttons(key=None, edit_type=None):
         buttons.sbutton('Empty String', f"botset emptyqbit {key}")
         buttons.sbutton('Close', "botset close")
         msg = f'Send a valid value for {key}. Timeout: 60 sec'
-    if key is None:
-        button = buttons.build_menu(1)
-    else:
-        button = buttons.build_menu(2)
+    button = buttons.build_menu(1) if key is None else buttons.build_menu(2)
     return msg, button
 
 def update_buttons(message, key=None, edit_type=None):
@@ -741,10 +742,8 @@ def edit_bot_settings(update, context):
         value = config_dict[data[2]]
         if len(str(value)) > 200:
             query.answer()
-            filename = f"{data[2]}.txt"
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f'{value}')
-            sendFile(context.bot, message, filename)
+            fileName = f"{data[2]}.txt"
+            sendFile(context.bot, message, value, fileName)
             return
         elif value == '':
             value = None
