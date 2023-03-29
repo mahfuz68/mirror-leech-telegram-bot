@@ -3,7 +3,6 @@ from random import SystemRandom
 from string import ascii_letters, digits
 from aiofiles.os import makedirs
 from asyncio import Event
-from concurrent.futures import ThreadPoolExecutor
 from mega import (MegaApi, MegaListener, MegaRequest, MegaTransfer, MegaError)
 
 from bot import LOGGER, config_dict, download_dict_lock, download_dict, non_queued_dl, non_queued_up, queued_dl, queue_dict_lock
@@ -31,7 +30,7 @@ class MegaAppListener(MegaListener):
         self.__size = 0
         self.error = None
         self.gid = ""
-        super(MegaAppListener, self).__init__()
+        super().__init__()
 
     @property
     def speed(self):
@@ -60,7 +59,7 @@ class MegaAppListener(MegaListener):
     def onRequestFinish(self, api, request, error):
         if str(error).lower() != "no error":
             self.error = error.copy()
-            LOGGER.error(self.error)
+            LOGGER.error(f'Mega onRequestFinishError: {self.error}')
             async_to_sync(self.event_setter)
             return
         request_type = request.getType()
@@ -130,14 +129,13 @@ class AsyncExecutor:
     def __init__(self):
         self.continue_event = Event()
 
-    async def do(self, function, args, pool=None):
+    async def do(self, function, args):
         self.continue_event.clear()
         await sync_to_async(function, *args)
         await self.continue_event.wait()
 
 
 async def add_mega_download(mega_link, path, listener, name, from_queue=False):
-    pool = ThreadPoolExecutor()
     MEGA_API_KEY = config_dict['MEGA_API_KEY']
     MEGA_EMAIL_ID = config_dict['MEGA_EMAIL_ID']
     MEGA_PASSWORD = config_dict['MEGA_PASSWORD']
@@ -163,7 +161,7 @@ async def add_mega_download(mega_link, path, listener, name, from_queue=False):
             await sync_to_async(folder_api.removeListener, mega_listener)
         return
     mname = name or await sync_to_async(node.getName)
-    if config_dict['STOP_DUPLICATE'] and not listener.isLeech:
+    if config_dict['STOP_DUPLICATE'] and not listener.isLeech and listener.upPath == 'gd':
         LOGGER.info('Checking File/Folder if already in Drive')
         if listener.isZip:
             mname = f"{mname}.zip"
@@ -205,7 +203,7 @@ async def add_mega_download(mega_link, path, listener, name, from_queue=False):
                 await sync_to_async(folder_api.removeListener, mega_listener)
             return
     async with download_dict_lock:
-        download_dict[listener.uid] = MegaDownloadStatus(mega_listener, listener)
+        download_dict[listener.uid] = MegaDownloadStatus(mega_listener, listener.message)
     async with queue_dict_lock:
         non_queued_dl.add(listener.uid)
     await makedirs(path, exist_ok=True)

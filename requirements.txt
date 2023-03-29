@@ -6,7 +6,7 @@ apscheduler
 aria2p
 asyncio
 beautifulsoup4
-cfscrape
+cloudscraper
 dnspython
 feedparser
 flask
@@ -23,7 +23,7 @@ pillow
 psutil
 pybase64
 pymongo
-pyrogram
+pyrogram==2.0.73
 python-dotenv
 python-magic
 qbittorrent-api

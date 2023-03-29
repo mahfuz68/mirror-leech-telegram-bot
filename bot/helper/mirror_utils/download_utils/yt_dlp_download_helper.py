@@ -8,7 +8,7 @@ from re import search as re_search
 
 from bot import download_dict_lock, download_dict, config_dict, non_queued_dl, non_queued_up, queued_dl, queue_dict_lock
 from bot.helper.mirror_utils.upload_utils.gdriveTools import GoogleDriveHelper
-from bot.helper.telegram_helper.message_utils import sendMessage, sendStatusMessage
+from bot.helper.telegram_helper.message_utils import sendStatusMessage
 from ..status_utils.yt_dlp_download_status import YtDlpDownloadStatus
 from bot.helper.mirror_utils.status_utils.queue_status import QueueStatus
 from bot.helper.ext_utils.bot_utils import sync_to_async, async_to_sync
@@ -63,7 +63,7 @@ class YoutubeDLHelper:
                      'noprogress': True,
                      'allow_playlist_files': True,
                      'overwrites': True,
-                     'trim_file_name': 200}
+                     'trim_file_name': 220}
 
     @property
     def download_speed(self):
@@ -127,7 +127,7 @@ class YoutubeDLHelper:
             self.__set_args(args)
         if get_info:
             self.opts['playlist_items'] = '0'
-        if link.startswith(('rtmp', 'mms', 'rstp')):
+        if link.startswith(('rtmp', 'mms', 'rstp', 'rtmps')):
             self.opts['external_downloader'] = 'ffmpeg'
         with YoutubeDL(self.opts) as ydl:
             try:
@@ -141,6 +141,7 @@ class YoutubeDLHelper:
                     raise e
                 return self.__onDownloadError(str(e))
         if 'entries' in result:
+            self.name = name
             for entry in result['entries']:
                 if not entry:
                     continue
@@ -150,9 +151,7 @@ class YoutubeDLHelper:
                     self.__size += entry['filesize']
                 if name == "":
                     outtmpl_ = '%(series,playlist_title,channel)s%(season_number& |)s%(season_number&S|)s%(season_number|)02d'
-                    self.name = ydl.prepare_filename(entry, outtmpl=outtmpl_)
-                else:
-                    self.name = name
+                    self.name = ydl.prepare_filename(entry, outtmpl=outtmpl_)               
         else:
             outtmpl_ ='%(title,fulltitle,alt_title)s%(season_number& |)s%(season_number&S|)s%(season_number|)02d%(episode_number&E|)s%(episode_number|)02d%(height& |)s%(height|)s%(height&p|)s%(fps|)s%(fps&fps|)s%(tbr& |)s%(tbr|)d.%(ext)s'
             realName = ydl.prepare_filename(result, outtmpl=outtmpl_)
@@ -207,7 +206,7 @@ class YoutubeDLHelper:
             folder_name = self.name.rsplit('.', 1)[0]
             self.opts['outtmpl'] = f"{path}/{folder_name}/{self.name}"
             self.name = folder_name
-        if config_dict['STOP_DUPLICATE'] and self.name != 'NA' and not self.__listener.isLeech:
+        if config_dict['STOP_DUPLICATE'] and self.name != 'NA' and not self.__listener.isLeech and self.__listener.upPath == 'gd':
             LOGGER.info('Checking File/Folder if already in Drive...')
             sname = self.name
             if self.__listener.isZip:
@@ -215,8 +214,8 @@ class YoutubeDLHelper:
             if sname:
                 smsg, button = await sync_to_async(GoogleDriveHelper().drive_list, sname, True)
                 if smsg:
-                    self.__onDownloadError('File/Folder already available in Drive.\n')
-                    await sendMessage(self.__listener.message, 'Here are the search results:', button)
+                    smsg = 'File/Folder already available in Drive.\nHere are the search results:'
+                    await self.__listener.onDownloadError(smsg, button)
                     return
         all_limit = config_dict['QUEUE_ALL']
         dl_limit = config_dict['QUEUE_DOWNLOAD']

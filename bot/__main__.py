@@ -18,8 +18,10 @@ from .helper.telegram_helper.bot_commands import BotCommands
 from .helper.telegram_helper.message_utils import sendMessage, editMessage, sendFile
 from .helper.telegram_helper.filters import CustomFilters
 from .helper.telegram_helper.button_build import ButtonMaker
-from .modules import authorize, list, cancel_mirror, mirror_status, mirror_leech, clone, ytdlp, rss, shell, eval, delete, count, users_settings, search, bt_select, bot_settings
+from bot.helper.listeners.aria2_listener import start_aria2_listener
+from .modules import authorize, gd_clone, gd_count, gd_delete, gd_list, cancel_mirror, mirror_leech, status, torrent_search, torrent_select, ytdlp, rss, shell, eval, users_settings, bot_settings
 
+start_aria2_listener()
 
 async def stats(client, message):
     if await aiopath.exists('.git'):
@@ -73,7 +75,7 @@ async def restart(client, message):
         QbInterval[0].cancel()
         QbInterval.clear()
     await sync_to_async(clean_all)
-    await (await create_subprocess_exec('pkill', '-9', '-f', 'gunicorn|aria2c|qbittorrent-nox|ffmpeg')).wait()
+    await (await create_subprocess_exec('pkill', '-9', '-f', 'gunicorn|aria2c|qbittorrent-nox|ffmpeg|rclone')).wait()
     await (await create_subprocess_exec('python3', 'update.py')).wait()
     async with aiopen(".restartmsg", "w") as f:
         await f.truncate(0)
@@ -139,7 +141,7 @@ async def bot_help(client, message):
 
 async def main():
     await start_cleanup()
-    await search.initiate_search_tools()
+    await torrent_search.initiate_search_tools()
     if INCOMPLETE_TASK_NOTIFIER and DATABASE_URL:
         if notifier_dict := await DbManger().get_incomplete_tasks():
             for cid, data in notifier_dict.items():

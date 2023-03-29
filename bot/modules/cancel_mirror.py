@@ -7,7 +7,7 @@ from bot import download_dict, bot, download_dict_lock, OWNER_ID, user_data
 from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.telegram_helper.filters import CustomFilters
 from bot.helper.telegram_helper.message_utils import sendMessage, auto_delete_message
-from bot.helper.ext_utils.bot_utils import getDownloadByGid, getAllDownload, MirrorStatus
+from bot.helper.ext_utils.bot_utils import getDownloadByGid, getAllDownload, MirrorStatus, new_task
 from bot.helper.telegram_helper import button_build
 
 
@@ -28,7 +28,7 @@ async def cancel_mirror(client, message):
             await sendMessage(message, "This is not an active task!")
             return
     elif len(msg) == 1:
-        msg = f"Reply to an active Command message which was used to start the download" \
+        msg = "Reply to an active Command message which was used to start the download" \
               f" or send <code>/{BotCommands.CancelMirror} GID</code> to cancel it!"
         await sendMessage(message, msg)
         return
@@ -40,6 +40,7 @@ async def cancel_mirror(client, message):
     obj = dl.download()
     await obj.cancel_download()
 
+@new_task
 async def cancel_all(status):
     gid = ''
     while dl := await getAllDownload(status):
@@ -49,6 +50,7 @@ async def cancel_all(status):
             await obj.cancel_download()
             await sleep(1)
 
+@new_task
 async def cancell_all_buttons(client, message):
     async with download_dict_lock:
         count = len(download_dict)
@@ -71,6 +73,7 @@ async def cancell_all_buttons(client, message):
     can_msg = await sendMessage(message, 'Choose tasks to cancel.', button)
     await auto_delete_message(message, can_msg)
 
+@new_task
 async def cancel_all_update(client, query):
     data = query.data.split()
     message = query.message
