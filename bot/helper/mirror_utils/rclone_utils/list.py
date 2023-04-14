@@ -6,7 +6,6 @@ from configparser import ConfigParser
 from pyrogram.handlers import CallbackQueryHandler
 from pyrogram.filters import regex, user
 from functools import partial
-from math import ceil
 from json import loads
 from time import time
 
@@ -130,7 +129,7 @@ class RcloneList:
 
     async def get_path_buttons(self):
         items_no = len(self.path_list)
-        pages = ceil(items_no/LIST_LIMIT)
+        pages = (items_no + LIST_LIMIT - 1) // LIST_LIMIT
         if items_no <= self.iter_start:
             self.iter_start = 0
         elif self.iter_start < 0 or self.iter_start > items_no:
@@ -153,13 +152,16 @@ class RcloneList:
             buttons.ibutton('Next', 'rcq nex', position='footer')
         if self.list_status == 'rcd':
             if self.item_type == '--dirs-only':
-                buttons.ibutton('Files', 'rcq itype --files-only', position='footer')
+                buttons.ibutton(
+                    'Files', 'rcq itype --files-only', position='footer')
             else:
-                buttons.ibutton('Folders', 'rcq itype --dirs-only', position='footer')
+                buttons.ibutton(
+                    'Folders', 'rcq itype --dirs-only', position='footer')
         if self.list_status == 'rcu' or len(self.path_list) > 0:
-            buttons.ibutton('Choose Current Path', 'rcq cur', position='footer')
+            buttons.ibutton('Choose Current Path',
+                            'rcq cur', position='footer')
         if self.path or len(self.__sections) > 1 or self.__rc_user and self.__rc_owner:
-                buttons.ibutton('Back', 'rcq back pa', position='footer')
+            buttons.ibutton('Back', 'rcq back pa', position='footer')
         if self.path:
             buttons.ibutton('Back To Root', 'rcq root', position='footer')
         buttons.ibutton('Cancel', 'rcq cancel', position='footer')
@@ -185,8 +187,9 @@ class RcloneList:
             return
         res, err, code = await cmd_exec(cmd)
         if code not in [0, -9]:
-            LOGGER.error(f'While rclone listing. Path: {self.remote}{self.path}. Stderr: {err}')
-            self.remote = err[:4090]
+            LOGGER.error(
+                f'While rclone listing. Path: {self.remote}{self.path}. Stderr: {err}')
+            self.remote = err[:4000]
             self.path = ''
             self.event.set()
             return
@@ -251,15 +254,19 @@ class RcloneList:
         else:
             await self.list_config()
 
-    async def get_rclone_path(self, status):
+    async def get_rclone_path(self, status, config_path=None):
         self.list_status = status
         future = self.__event_handler()
-        self.__rc_user = await aiopath.exists(self.user_rcc_path)
-        self.__rc_owner = await aiopath.exists('rclone.conf')
-        if not self.__rc_owner and not self.__rc_user:
-            self.event.set()
-            return 'Rclone Config not Exists!'
-        await self.list_config()
+        if config_path is None:
+            self.__rc_user = await aiopath.exists(self.user_rcc_path)
+            self.__rc_owner = await aiopath.exists('rclone.conf')
+            if not self.__rc_owner and not self.__rc_user:
+                self.event.set()
+                return 'Rclone Config not Exists!'
+            await self.list_config()
+        else:
+            self.config_path = config_path
+            await self.list_remotes()
         await wrap_future(future)
         await self.__reply_to.delete()
         if self.config_path != 'rclone.conf' and not self.is_cancelled:
