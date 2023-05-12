@@ -95,7 +95,7 @@ class MirrorLeechListener:
             await self.onUploadError('Downloaded! Waiting for other tasks...')
             return
         if name == "None" or self.isQbit or not await aiopath.exists(f"{self.dir}/{name}"):
-            name = (await listdir(self.dir))[-1]
+            name = (await listdir(self.dir))[0]
         m_path = f"{self.dir}/{name}"
         size = await get_path_size(m_path)
         async with queue_dict_lock:
@@ -354,7 +354,7 @@ class MirrorLeechListener:
                         buttons.ubutton("⚡ Index Link", share_url)
                     else:
                         buttons.ubutton("⚡ Index Link", share_url)
-                        if config_dict['VIEW_LINK']:
+                        if mime_type.startswith(('image', 'video', 'audio')):
                             share_urls = f'{INDEX_URL}/{url_path}?a=view'
                             buttons.ubutton("🌐 View Link", share_urls)
                 button = buttons.build_menu(2)
