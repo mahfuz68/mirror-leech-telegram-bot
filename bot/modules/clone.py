@@ -48,6 +48,9 @@ async def rcloneNode(client, message, link, dst_path, rcf, tag):
             return
 
     dst_path = (dst_path or config_dict['RCLONE_PATH']).strip('/')
+    if not is_rclone_path(dst_path):
+        await sendMessage(message, 'Wrong Rclone Clone Destination!')
+        return
     if dst_path.startswith('mrcc:'):
         if config_path != f'rclone/{message.from_user.id}.conf':
             await sendMessage(message, 'You should use same rclone.conf to clone between pathies!')
@@ -167,25 +170,22 @@ async def clone(client, message):
     args = text.split(maxsplit=1)
     link = ''
     multi = 0
+
+    if username := message.from_user.username:
+        tag = f"@{username}"
+    else:
+        tag = message.from_user.mention
+
     if len(args) > 1:
-        link = args[1].strip()
-        if not link.startswith(('up:', 'rcf:')):
-            link = re_split(r' up: | rcf: ', link)[0].strip()
-        if link.isdigit():
-            multi = int(link)
+        arg = args[1].strip()
+        if not arg.startswith(('up:', 'rcf:')):
+            link = re_split(r' up: | rcf: ', arg)[0].strip()
+        if arg.isdigit():
+            multi = int(arg)
             link = ''
-        elif username := message.from_user.username:
-            tag = f"@{username}"
-        else:
-            tag = message.from_user.mention
-    if reply_to := message.reply_to_message:
-        if len(link) == 0:
-            link = reply_to.text.split('\n', 1)[0].strip()
-        if not reply_to.from_user.is_bot:
-            if username := reply_to.from_user.username:
-                tag = f"@{username}"
-            else:
-                tag = reply_to.from_user.mention
+
+    if len(link) == 0 and (reply_to := message.reply_to_message):
+        link = reply_to.text.split('\n', 1)[0].strip()
 
     rcf = text.split(' rcf: ', 1)
     rcf = re_split(' up: ', rcf[1])[0].strip() if len(rcf) > 1 else None
@@ -208,7 +208,7 @@ async def clone(client, message):
 
     __run_multi()
 
-    if not link:
+    if len(link) == 0:
         await sendMessage(message, CLONE_HELP_MESSAGE)
         return
 
@@ -217,7 +217,7 @@ async def clone(client, message):
             await sendMessage(message, 'Rclone Config Not exists!')
             return
         if not config_dict['RCLONE_PATH'] and not dst_path:
-            await sendMessage(message, 'Destinantion not specified!')
+            await sendMessage(message, 'Destination not specified!')
             return
         await rcloneNode(client, message, link, dst_path, rcf, tag)
     else:

@@ -8,7 +8,7 @@ from asyncio import create_subprocess_exec, sleep, Event
 
 from bot import Interval, aria2, DOWNLOAD_DIR, download_dict, download_dict_lock, LOGGER, DATABASE_URL, \
     MAX_SPLIT_SIZE, config_dict, status_reply_dict_lock, user_data, non_queued_up, non_queued_dl, queued_up, \
-    queued_dl, queue_dict_lock
+    queued_dl, queue_dict_lock, GLOBAL_EXTENSION_FILTER
 from bot.helper.ext_utils.bot_utils import sync_to_async, get_readable_file_size
 from bot.helper.ext_utils.fs_utils import get_base_name, get_path_size, clean_download, clean_target, \
     is_first_archive_split, is_archive, is_archive_split
@@ -68,15 +68,21 @@ class MirrorLeechListener:
             await DbManger().add_incomplete_task(self.message.chat.id, self.message.link, self.tag)
 
     async def onDownloadComplete(self):
-        if len(self.sameDir) > 0:
-            await sleep(8)
         multi_links = False
+        while True:
+            if self.sameDir:
+                if self.sameDir['total'] == 1 or self.sameDir['total'] > 1 and len(self.sameDir['tasks']) > 1:
+                    break
+            else:
+                break
+            await sleep(0)
         async with download_dict_lock:
-            if len(self.sameDir) > 1:
-                self.sameDir.remove(self.uid)
+            if self.sameDir and self.sameDir['total'] > 1:
+                self.sameDir['tasks'].remove(self.uid)
+                self.sameDir['total'] -= 1
                 folder_name = (await listdir(self.dir))[-1]
                 path = f"{self.dir}/{folder_name}"
-                des_path = f"{DOWNLOAD_DIR}{list(self.sameDir)[0]}/{folder_name}"
+                des_path = f"{DOWNLOAD_DIR}{list(self.sameDir['tasks'])[0]}/{folder_name}"
                 await makedirs(des_path, exist_ok=True)
                 for item in await listdir(path):
                     if item.endswith(('.aria2', '.!qB')):
@@ -95,7 +101,10 @@ class MirrorLeechListener:
             await self.onUploadError('Downloaded! Waiting for other tasks...')
             return
         if name == "None" or self.isQbit or not await aiopath.exists(f"{self.dir}/{name}"):
-            name = (await listdir(self.dir))[0]
+            files = await listdir(self.dir)
+            name = files[-1]
+            if name == "yt-dlp-thumb":
+                name = files[0]
         m_path = f"{self.dir}/{name}"
         size = await get_path_size(m_path)
         async with queue_dict_lock:
@@ -115,6 +124,9 @@ class MirrorLeechListener:
                 'split_size', False) or config_dict['LEECH_SPLIT_SIZE']
             cmd = ["7z", f"-v{LEECH_SPLIT_SIZE}b", "a",
                    "-mx=0", f"-p{self.pswd}", path, m_path]
+            for ext in GLOBAL_EXTENSION_FILTER:
+                ex_ext = f'-xr!*.{ext}'
+                cmd.append(ex_ext)
             if self.isLeech and int(size) > LEECH_SPLIT_SIZE:
                 if self.pswd is None:
                     del cmd[4]
@@ -395,8 +407,9 @@ class MirrorLeechListener:
             if self.uid in download_dict.keys():
                 del download_dict[self.uid]
             count = len(download_dict)
-            if self.uid in self.sameDir:
-                self.sameDir.remove(self.uid)
+            if self.sameDir and self.uid in self.sameDir['tasks']:
+                self.sameDir['tasks'].remove(self.uid)
+                self.sameDir['total'] -= 1
         msg = f"{self.tag} Download: {escape(error)}"
         await sendMessage(self.message, msg, button)
         if count == 0:
@@ -430,8 +443,6 @@ class MirrorLeechListener:
             if self.uid in download_dict.keys():
                 del download_dict[self.uid]
             count = len(download_dict)
-            if self.uid in self.sameDir:
-                self.sameDir.remove(self.uid)
         await sendMessage(self.message, f"{self.tag} {escape(error)}")
         if count == 0:
             await self.clean()

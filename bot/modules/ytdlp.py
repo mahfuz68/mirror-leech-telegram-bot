@@ -19,6 +19,7 @@ from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.telegram_helper.filters import CustomFilters
 from bot.helper.listeners.tasks_listener import MirrorLeechListener
 from bot.helper.ext_utils.help_messages import YT_HELP_MESSAGE
+from bot.helper.ext_utils.bulk_links import extract_bulk_links
 
 
 @new_task
@@ -238,7 +239,7 @@ async def _mdisk(link, name):
 
 
 @new_task
-async def _ytdl(client, message, isZip=False, isLeech=False, sameDir={}):
+async def _ytdl(client, message, isZip=False, isLeech=False, sameDir=None, bulk=[]):
     mssg = message.text
     user_id = message.from_user.id
     qual = ''
@@ -246,11 +247,14 @@ async def _ytdl(client, message, isZip=False, isLeech=False, sameDir={}):
     multi = 0
     link = ''
     folder_name = ''
+    bulk_start = 0
+    bulk_end = 0
+    is_bulk = False
+    index = 1
 
-    args = mssg.split(maxsplit=3)
+    args = mssg.split(maxsplit=4)
     args.pop(0)
     if len(args) > 0:
-        index = 1
         for x in args:
             x = x.strip()
             if x == 's':
@@ -259,38 +263,75 @@ async def _ytdl(client, message, isZip=False, isLeech=False, sameDir={}):
             elif x.strip().isdigit():
                 multi = int(x)
                 mi = index
+                index += 1
             elif x.startswith('m:'):
                 marg = x.split('m:', 1)
+                index += 1
                 if len(marg) > 1:
                     folder_name = f'/{marg[1]}'
-                    if not sameDir:
-                        sameDir = set()
-                    sameDir.add(message.id)
+            elif x == 'b':
+                is_bulk = True
+                bi = index
+                index += 1
+            elif x.startswith('b:'):
+                is_bulk = True
+                bi = index
+                index += 1
+                dargs = x.split(':')
+                bulk_start = dargs[1] or 0
+                if len(dargs) == 3:
+                    bulk_end = dargs[2] or 0
             else:
                 break
-        if multi == 0:
+        if multi == 0 or len(bulk) != 0:
             args = mssg.split(maxsplit=index)
             if len(args) > index:
                 x = args[index].strip()
                 if not x.startswith(('n:', 'pswd:', 'up:', 'rcf:', 'opt:')):
                     link = re_split(r' opt: | pswd: | n: | rcf: | up: ', x)[
                         0].strip()
+                    
+        if len(folder_name) > 0 and not is_bulk:
+            if sameDir is None:
+                sameDir = {'total': multi, 'tasks': set()}
+            sameDir['tasks'].add(message.id)
+
+    if is_bulk:
+        bulk = await extract_bulk_links(message, bulk_start, bulk_end)
+        if len(bulk) == 0:
+            await sendMessage(message, 'Reply to text file or to tg message that have links seperated by new line!')
+            return
+        b_msg = mssg.split(maxsplit=index)
+        b_msg[bi] = f'{len(bulk)}'
+        b_msg.insert(index, bulk[0])
+        nextmsg = await sendMessage(message, " ".join(b_msg))
+        nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=nextmsg.id)
+        nextmsg.from_user = message.from_user
+        _ytdl(client, nextmsg, isZip, isLeech, sameDir, bulk)
+        return
+
+    if len(bulk) != 0:
+        del bulk[0]
 
     @new_task
     async def __run_multi():
         if multi <= 1:
             return
         await sleep(4)
-        nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=message.reply_to_message_id + 1)
-        ymsg = mssg.split(maxsplit=mi+1)
+        ymsg = mssg.split(maxsplit=index)
         ymsg[mi] = f'{multi - 1}'
-        nextmsg = await sendMessage(nextmsg, ' '.join(ymsg))
-        nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=nextmsg.id)
+        if len(bulk) != 0:
+            ymsg[index] = bulk[0]
+            nextmsg = await sendMessage(message, " ".join(ymsg))
+        else:
+            nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=message.reply_to_message_id + 1)
+            nextmsg = await sendMessage(nextmsg, ' '.join(ymsg))
+            nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=nextmsg.id)
         if len(folder_name) > 0:
-            sameDir.add(nextmsg.id)
+            sameDir['tasks'].add(nextmsg.id)
         nextmsg.from_user = message.from_user
         await sleep(4)
-        _ytdl(client, nextmsg, isZip, isLeech, sameDir)
+        _ytdl(client, nextmsg, isZip, isLeech, sameDir, bulk)
 
     path = f'{DOWNLOAD_DIR}{message.id}{folder_name}'
 
@@ -321,14 +362,8 @@ async def _ytdl(client, message, isZip=False, isLeech=False, sameDir={}):
     else:
         tag = message.from_user.mention
 
-    if reply_to := message.reply_to_message:
-        if len(link) == 0:
-            link = reply_to.text.split('\n', 1)[0].strip()
-        if not reply_to.from_user.is_bot:
-            if username := reply_to.from_user.username:
-                tag = f'@{username}'
-            else:
-                tag = reply_to.from_user.mention
+    if len(link) == 0 and (reply_to := message.reply_to_message):
+        link = reply_to.text.split('\n', 1)[0].strip()
 
     if not is_url(link):
         await sendMessage(message, YT_HELP_MESSAGE)
@@ -353,6 +388,9 @@ async def _ytdl(client, message, isZip=False, isLeech=False, sameDir={}):
             if not await aiopath.exists(config_path):
                 await sendMessage(message, f'Rclone Config: {config_path} not Exists!')
                 return
+        if up != 'gd' and not is_rclone_path(up):
+            await sendMessage(message, 'Wrong Rclone Upload Destination!')
+            return
 
     if up == 'rcl' and not isLeech:
         up = await RcloneList(client, message).get_rclone_path('rcu')
