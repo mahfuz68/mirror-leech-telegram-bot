@@ -11,12 +11,12 @@ from subprocess import Popen, run as srun
 from os import remove as osremove, path as ospath, environ, getcwd
 from aria2p import API as ariaAPI, Client as ariaClient
 from qbittorrentapi import Client as qbClient
-# from faulthandler import enable as faulthandler_enable
+from faulthandler import enable as faulthandler_enable
 from socket import setdefaulttimeout
 from logging import getLogger, FileHandler, StreamHandler, INFO, basicConfig, error as log_error, info as log_info, warning as log_warning
 from uvloop import install
 
-# faulthandler_enable()
+faulthandler_enable()
 install()
 setdefaulttimeout(600)
 
@@ -175,7 +175,7 @@ USER_SESSION_STRING = environ.get('USER_SESSION_STRING', '')
 if len(USER_SESSION_STRING) != 0:
     log_info("Creating client from USER_SESSION_STRING")
     user = tgClient('user', TELEGRAM_API, TELEGRAM_HASH, session_string=USER_SESSION_STRING,
-                    parse_mode=enums.ParseMode.HTML, no_updates=True, max_concurrent_transmissions=1000).start()
+                    parse_mode=enums.ParseMode.HTML, max_concurrent_transmissions=1000).start()
     IS_PREMIUM_USER = user.me.is_premium
 
 MEGA_EMAIL = environ.get('MEGA_EMAIL', '')

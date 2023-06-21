@@ -47,7 +47,7 @@ async def __onDownloadStarted(api, gid):
                 download = download.live
             LOGGER.info('Checking File/Folder if already in Drive...')
             name = download.name
-            if listener.isZip:
+            if listener.compress:
                 name = f"{name}.zip"
             elif listener.extract:
                 try:
@@ -171,7 +171,7 @@ async def __onDownloadError(api, gid):
 
 
 def start_aria2_listener():
-    aria2.listen_to_notifications(threaded=True,
+    aria2.listen_to_notifications(threaded=False,
                                   on_download_start=__onDownloadStarted,
                                   on_download_error=__onDownloadError,
                                   on_download_stop=__onDownloadStopped,
